@@ -1,30 +1,30 @@
 package main
 
 import (
-	"net/http"
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"log"
-	"time"
+	"net/http"
 	"strconv"
-	"github.com/gorilla/mux"
+	"time"
 )
 
 type WatchManager struct {
-	upgrader *websocket.Upgrader
-	store notificationStore
+	upgrader     *websocket.Upgrader
+	store        notificationStore
 	pushInterval time.Duration
 }
 
 func NewWatchManager(store notificationStore, pushInterval time.Duration) *WatchManager {
 	return &WatchManager{
-		upgrader: &websocket.Upgrader{},
-		store: store,
+		upgrader:     &websocket.Upgrader{},
+		store:        store,
 		pushInterval: pushInterval,
 	}
 }
 
-func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Request){
+func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Request) {
 	topic, ok := mux.Vars(r)["topic"]
 	if !ok {
 		log.Printf("error: topic not provided")
@@ -39,7 +39,6 @@ func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Reques
 		http.Error(w, fmt.Sprintf("failed to upgrade HTTP connection: %v", err), http.StatusInternalServerError)
 		return
 	}
-
 
 	genID := r.URL.Query().Get("generationID")
 	fromIdx := r.URL.Query().Get("fromIndex")
@@ -66,9 +65,12 @@ func (wm *WatchManager) manageWatch(conn *websocket.Conn, genID string, idx uint
 			handleError(err, conn)
 			return
 		}
-		if err := conn.WriteJSON(notificationResponse); err != nil {
-			handleError(err, conn)
-			return
+		if notificationsLength := len(notificationResponse.Notifications); notificationsLength > 0 {
+			if err := conn.WriteJSON(notificationResponse); err != nil {
+				handleError(err, conn)
+				return
+			}
+			idx = uint64(notificationResponse.Notifications[notificationsLength-1].Index)
 		}
 		time.Sleep(wm.pushInterval)
 	}

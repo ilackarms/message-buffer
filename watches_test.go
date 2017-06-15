@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"net/http/httptest"
 	"net/url"
 	"time"
-	"github.com/gorilla/mux"
 )
 
 var subject = "WatchManager"
@@ -19,7 +19,7 @@ type testNotificationStore struct {
 
 func (s *testNotificationStore) append(v interface{}) error {
 	s.notifications = append(s.notifications, Notification{
-		Index:     uint64(len(s.notifications)),
+		Index:     uint64(len(s.notifications) + 1),
 		Timestamp: time.Now(),
 		Data:      v,
 	})
@@ -100,7 +100,7 @@ func runWatchTest(t *testing.T, test struct {
 	submittedMessages := []string{}
 	go func() {
 		for i := 0; i < test.MessageCount; i++ {
-			item := fmt.Sprintf("message #%v", i)
+			item := fmt.Sprintf("{test packet #%v}", i)
 			store.append(item)
 			submittedMessages = append(submittedMessages, item)
 			time.Sleep(test.MessageDelay)
@@ -108,19 +108,22 @@ func runWatchTest(t *testing.T, test struct {
 	}()
 
 	receivedItems := 0
-	select {
-	case <-time.After((test.PollInterval + test.MessageDelay) * time.Duration(test.MessageCount)):
-		t.Fatal("timed out waiting for messages to be received")
-	case notificationsResponse := <-messageChan:
-		for _, notification := range notificationsResponse.Notifications {
-			item := notification.Data.(string)
-			if item != submittedMessages[receivedItems] {
-				t.Fatalf("expected received message %s to equal sent message %s", item, submittedMessages[receivedItems])
-			}
-			receivedItems++
-			if receivedItems == test.MessageCount {
-				return
+	for {
+		select {
+		case <-time.After((test.PollInterval + test.MessageDelay) * time.Duration(test.MessageCount)):
+			t.Fatal("timed out waiting for messages to be received")
+		case notificationsResponse := <-messageChan:
+			for _, notification := range notificationsResponse.Notifications {
+				item := notification.Data.(string)
+				if item != submittedMessages[receivedItems] {
+					t.Fatalf("expected received message %s to equal sent message %s", item, submittedMessages[receivedItems])
+				}
+				receivedItems++
+				if receivedItems == test.MessageCount {
+					return
+				}
 			}
 		}
 	}
+
 }

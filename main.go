@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/gorilla/mux"
 )
 
 // A NotificationsResponse contains a sequence of notifications for a given generation ID.
