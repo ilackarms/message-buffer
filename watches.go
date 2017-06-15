@@ -2,39 +2,40 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
-type WatchManager struct {
+type watchManager struct {
 	upgrader     *websocket.Upgrader
 	store        notificationStore
 	pushInterval time.Duration
 }
 
-func NewWatchManager(store notificationStore, pushInterval time.Duration) *WatchManager {
-	return &WatchManager{
+func newWatchManager(store notificationStore, pushInterval time.Duration) *watchManager {
+	return &watchManager{
 		upgrader:     &websocket.Upgrader{},
 		store:        store,
 		pushInterval: pushInterval,
 	}
 }
 
-func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Request) {
+func (wm *watchManager) handleWatchRequest(w http.ResponseWriter, r *http.Request) {
 	topic, ok := mux.Vars(r)["topic"]
 	if !ok {
-		log.Printf("error: topic not provided")
+		log.Printf("Error: topic not provided")
 		http.Error(w, "must provide topic", http.StatusBadRequest)
 		return
 	}
 
 	conn, err := wm.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("failed to upgrade HTTP connection: %v", err)
+		log.Printf("Failed to upgrade HTTP connection: %v", err)
 		http.Error(w, fmt.Sprintf("failed to upgrade HTTP connection: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -55,7 +56,7 @@ func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Reques
 	go wm.manageWatch(conn, topic, genID, idx)
 }
 
-func (wm *WatchManager) manageWatch(conn *websocket.Conn, topic, genID string, idx uint64) {
+func (wm *watchManager) manageWatch(conn *websocket.Conn, topic, genID string, idx uint64) {
 	log.Printf("connection accepted from %v", conn.RemoteAddr())
 	defer closeConn(conn)
 	for {
@@ -69,7 +70,7 @@ func (wm *WatchManager) manageWatch(conn *websocket.Conn, topic, genID string, i
 				handleError(err, conn)
 				return
 			}
-			idx = uint64(notificationResponse.Notifications[notificationsLength-1].Index)
+			idx = notificationResponse.Notifications[notificationsLength-1].Index
 		}
 		time.Sleep(wm.pushInterval)
 	}

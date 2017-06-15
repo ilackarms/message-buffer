@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 // A NotificationsResponse contains a sequence of notifications for a given generation ID.
@@ -95,8 +96,8 @@ func serve(addr string, store notificationStore, pushInterval time.Duration) err
 		}
 	}).Methods("GET")
 
-	watchManager := NewWatchManager(store, pushInterval)
-	r.HandleFunc("/{topic}/watch", watchManager.HandleWatchRequest)
+	watchManager := newWatchManager(store, pushInterval)
+	r.HandleFunc("/{topic}/watch", watchManager.handleWatchRequest)
 
 	return http.ListenAndServe(addr, r)
 }

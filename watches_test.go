@@ -1,17 +1,17 @@
 package main
 
 import (
-	"testing"
-
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 	"net/http/httptest"
 	"net/url"
+	"testing"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
-var subject = "WatchManager"
+var subject = "watchManager"
 
 type testNotificationStore struct {
 	notifications []Notification
@@ -40,18 +40,18 @@ func (s *testNotificationStore) close() error {
 
 func TestWatch(t *testing.T) {
 	var tests = []struct {
-		Context      string
-		Expectation  string
-		MessageCount int
-		MessageDelay time.Duration
-		PollInterval time.Duration
+		context      string
+		expectation  string
+		messageCount int
+		messageDelay time.Duration
+		pushInterval time.Duration
 	}{
 		{
-			Context:      "New messages created every 1s",
-			Expectation:  "send messages to client every pollInterval",
-			MessageCount: 10,
-			MessageDelay: time.Second,
-			PollInterval: time.Second * 2,
+			context:      "New messages created every 1s",
+			expectation:  "send messages to client every pushInterval",
+			messageCount: 10,
+			messageDelay: time.Second,
+			pushInterval: time.Second * 2,
 		},
 	}
 
@@ -61,20 +61,20 @@ func TestWatch(t *testing.T) {
 }
 
 func runWatchTest(t *testing.T, test struct {
-	Context      string
-	Expectation  string
-	MessageCount int
-	MessageDelay time.Duration
-	PollInterval time.Duration
+	context      string
+	expectation  string
+	messageCount int
+	messageDelay time.Duration
+	pushInterval time.Duration
 }) {
-	t.Logf("When %s, %s should %s", test.Context, subject, test.Expectation)
+	t.Logf("When %s, %s should %s", test.context, subject, test.expectation)
 
 	store := &testNotificationStore{}
 	dialer := websocket.DefaultDialer
 	r := mux.NewRouter()
-	watchManager := NewWatchManager(store, test.PollInterval)
+	watchManager := newWatchManager(store, test.pushInterval)
 
-	r.HandleFunc("/{topic}/watch", watchManager.HandleWatchRequest)
+	r.HandleFunc("/{topic}/watch", watchManager.handleWatchRequest)
 	server := httptest.NewServer(r)
 	defer server.Close()
 	u, _ := url.Parse(server.URL)
@@ -99,18 +99,18 @@ func runWatchTest(t *testing.T, test struct {
 
 	submittedMessages := []string{}
 	go func() {
-		for i := 0; i < test.MessageCount; i++ {
+		for i := 0; i < test.messageCount; i++ {
 			item := fmt.Sprintf("{test packet #%v}", i)
 			store.append("testtopic", item)
 			submittedMessages = append(submittedMessages, item)
-			time.Sleep(test.MessageDelay)
+			time.Sleep(test.messageDelay)
 		}
 	}()
 
 	receivedItems := 0
 	for {
 		select {
-		case <-time.After((test.PollInterval + test.MessageDelay) * time.Duration(test.MessageCount)):
+		case <-time.After((test.pushInterval + test.messageDelay) * time.Duration(test.messageCount)):
 			t.Fatal("timed out waiting for messages to be received")
 		case notificationsResponse := <-messageChan:
 			for _, notification := range notificationsResponse.Notifications {
@@ -119,7 +119,7 @@ func runWatchTest(t *testing.T, test struct {
 					t.Fatalf("expected received message %s to equal sent message %s", item, submittedMessages[receivedItems])
 				}
 				receivedItems++
-				if receivedItems == test.MessageCount {
+				if receivedItems == test.messageCount {
 					return
 				}
 			}
