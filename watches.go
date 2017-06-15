@@ -31,7 +31,6 @@ func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "must provide topic", http.StatusBadRequest)
 		return
 	}
-	log.Printf("TODO: use topics: %v", topic)
 
 	conn, err := wm.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -53,14 +52,14 @@ func (wm *WatchManager) HandleWatchRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	go wm.manageWatch(conn, genID, idx)
+	go wm.manageWatch(conn, topic, genID, idx)
 }
 
-func (wm *WatchManager) manageWatch(conn *websocket.Conn, genID string, idx uint64) {
+func (wm *WatchManager) manageWatch(conn *websocket.Conn, topic, genID string, idx uint64) {
 	log.Printf("connection accepted from %v", conn.RemoteAddr())
 	defer closeConn(conn)
 	for {
-		notificationResponse, err := wm.store.get(genID, idx)
+		notificationResponse, err := wm.store.get(topic, genID, idx)
 		if err != nil {
 			handleError(err, conn)
 			return

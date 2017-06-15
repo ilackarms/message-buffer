@@ -17,7 +17,7 @@ type testNotificationStore struct {
 	notifications []Notification
 }
 
-func (s *testNotificationStore) append(v interface{}) error {
+func (s *testNotificationStore) append(topic string, v interface{}) error {
 	s.notifications = append(s.notifications, Notification{
 		Index:     uint64(len(s.notifications) + 1),
 		Timestamp: time.Now(),
@@ -26,7 +26,7 @@ func (s *testNotificationStore) append(v interface{}) error {
 	return nil
 }
 
-func (s *testNotificationStore) get(generationID string, fromIndex uint64) (*NotificationsResponse, error) {
+func (s *testNotificationStore) get(topic string, generationID string, fromIndex uint64) (*NotificationsResponse, error) {
 	i := int(fromIndex)
 	return &NotificationsResponse{
 		GenerationID:  generationID,
@@ -101,7 +101,7 @@ func runWatchTest(t *testing.T, test struct {
 	go func() {
 		for i := 0; i < test.MessageCount; i++ {
 			item := fmt.Sprintf("{test packet #%v}", i)
-			store.append(item)
+			store.append("testtopic", item)
 			submittedMessages = append(submittedMessages, item)
 			time.Sleep(test.MessageDelay)
 		}
