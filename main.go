@@ -63,8 +63,8 @@ func serve(addr string, store notificationStore, pushInterval time.Duration) err
 			return
 		}
 
-		genID := r.FormValue("generationID")
-		fromIdx := r.FormValue("fromIndex")
+		genID := r.URL.Query().Get("generationID")
+		fromIdx := r.URL.Query().Get("fromIndex")
 
 		if fromIdx == "" {
 			fromIdx = "0"
