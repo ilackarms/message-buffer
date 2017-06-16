@@ -73,12 +73,12 @@ func runWatchTest(t *testing.T, test struct {
 	r := mux.NewRouter()
 	watchManager := newWatchManager(store, test.pushInterval)
 
-	r.HandleFunc("/{topic}/watch", watchManager.handleWatchRequest)
+	r.HandleFunc("/topics/{topic}/watch", watchManager.handleWatchRequest)
 	server := httptest.NewServer(r)
 	defer server.Close()
 	u, _ := url.Parse(server.URL)
 	u.Scheme = "ws"
-	u.Path = "/mytopic/watch"
+	u.Path = "/topics/mytopic/watch"
 
 	conn, resp, err := dialer.Dial(u.String(), nil)
 	if err != nil {
