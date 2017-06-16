@@ -22,16 +22,16 @@ var (
 	listenAddr    = ":9099"
 	retention     = 24 * time.Hour
 	gcInterval    = 10 * time.Minute
-	pushInterval  = 5 * time.Second
+	pushInterval  = 1 * time.Millisecond
 	serverStarted bool
 )
 
 func initServer(dir string, t *testing.T) {
 	if !serverStarted {
+		serverStarted = true
 		go func() {
 			storagePath = filepath.Join(dir, "messages.db")
 			t.Logf("starting server")
-			serverStarted = true
 			if err := runService(storagePath, listenAddr, retention, gcInterval, pushInterval); err != nil {
 				t.Fatalf("server encountered unexpected error: %v", err)
 			}
@@ -54,6 +54,7 @@ func TestE2EAppendGet(t *testing.T) {
 		t.Fatalf("failed to retrieve generation ID from server: %v", err)
 	}
 
+	//since we don't clean up db from other tests, make sure topics are unique
 	topics := []string{
 		"topic0",
 		"topic1",
@@ -94,6 +95,75 @@ func TestE2EAppendGet(t *testing.T) {
 				t.Fatalf("returned item did not match expected: %v != %v", retItem, item)
 			}
 			idx++
+		}
+	}
+}
+
+func TestE2EWatch(t *testing.T) {
+	dir, err := ioutil.TempDir(".", "e2e_test_")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	defer os.RemoveAll(dir)
+	initServer(dir, t)
+
+	genID, err := getGenerationID()
+	if err != nil {
+		t.Fatalf("failed to retrieve generation ID from server: %v", err)
+	}
+
+	//since we don't clean up db from other tests, make sure topics are unique
+	topics := []string{
+		"topicA",
+		"topicB",
+		"topicC",
+		"topicD",
+	}
+	items := []map[string]interface{}{
+		{"A": "Hi", "B": 0.0},
+		{"A": "Hello", "B": 1.0},
+		{"A": "Bonjour", "B": 2.0},
+		{"A": "Hola", "B": 3.0},
+		{"A": "Shalon", "B": 4.0},
+	}
+	for _, topic := range topics {
+		msgsChan, errChan, err := initiateWatch(topic, genID, "0")
+		if err != nil {
+			t.Fatalf("failed to start watch: %v", err)
+		}
+		go func() {
+			t.Fatalf("encountered error during watch: %v", <-errChan)
+		}()
+
+		receivedMessages := make(chan Message)
+		go func() {
+			for {
+				select {
+				case <-time.After(time.Second * 20):
+					t.Fatalf("timed out waiting for messages to be received")
+				case msgs := <-msgsChan:
+					if msgs.GenerationID != genID {
+						t.Fatalf("server did not return expected generation ID: %s != %s", msgs.GenerationID, genID)
+					}
+					for _, msg := range msgs.Messages {
+						receivedMessages <- msg
+					}
+				}
+			}
+		}()
+
+		for _, item := range items {
+			if err := doAppend(item, topic); err != nil {
+				t.Fatalf("failed to perform append: %v", err)
+			}
+			msg := <-receivedMessages
+			retItem, ok := msg.Data.(map[string]interface{})
+			if !ok {
+				t.Fatalf("type of message did not match expected: %v != map[string]interface{}", reflect.TypeOf(retItem))
+			}
+			if !reflect.DeepEqual(retItem, item) {
+				t.Fatalf("returned item did not match expected: %v != %v", retItem, item)
+			}
 		}
 	}
 }
@@ -175,13 +245,14 @@ func initiateWatch(topic, genID, fromIdx string) (<-chan *MessagesResponse, <-ch
 	query.Set("fromIndex", fromIdx)
 	u := url.URL{
 		Scheme:   "ws",
-		Host:     "localhost:9090",
-		Path:     "/topics" + topic + "/watch",
+		Host:     "localhost" + listenAddr,
+		Path:     "/topics/" + topic + "/watch",
 		RawQuery: query.Encode(),
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	print(u.String())
+	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to connect to websocket: %v, response: %#v", err, resp)
 	}
 	msgsChan := make(chan *MessagesResponse)
 	errChan := make(chan error)
