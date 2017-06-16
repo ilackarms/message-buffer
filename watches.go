@@ -60,6 +60,7 @@ func (wm *watchManager) manageWatch(conn *websocket.Conn, topic, genID string, i
 	log.Printf("connection accepted from %v", conn.RemoteAddr())
 	defer closeConn(conn)
 	for {
+		log.Printf("current index: %v", idx)
 		msgsResponse, err := wm.store.get(topic, genID, idx)
 		if err != nil {
 			handleError(err, conn)
