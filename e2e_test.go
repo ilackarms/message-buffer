@@ -8,42 +8,44 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"os"
-	"path/filepath"
-	"reflect"
+)
+
+const (
+	listenAddr    = ":9099"
 )
 
 var (
-	storagePath   string
-	listenAddr    = ":9099"
-	retention     = 24 * time.Hour
-	gcInterval    = 10 * time.Minute
-	pushInterval  = 1 * time.Millisecond
 	serverStarted bool
 )
 
 func initServer(dir string, t *testing.T) {
-	if !serverStarted {
-		serverStarted = true
-		go func() {
-			storagePath = filepath.Join(dir, "messages.db")
-			t.Logf("starting server")
-			if err := runService(storagePath, listenAddr, retention, gcInterval, pushInterval); err != nil {
-				t.Fatalf("server encountered unexpected error: %v", err)
-			}
-		}()
-		if err := waitServerStart(); err != nil {
-			t.Fatalf("server encountered unexpected error: %v", err)
-		}
+	if serverStarted {
+		return
+	}
+	retention     := 24 * time.Hour
+	gcInterval    := 10 * time.Minute
+	pushInterval  := 1 * time.Millisecond
+	serverStarted = true
+	go func() {
+		storagePath := filepath.Join(dir, "messages.db")
+		t.Logf("starting server")
+		err := runService(storagePath, listenAddr, retention, gcInterval, pushInterval)
+		t.Fatalf("server encountered unexpected error: %v", err)
+	}()
+	if err := waitServerStart(); err != nil {
+		t.Fatalf("server encountered unexpected error: %v", err)
 	}
 }
 
 func TestE2EAppendGet(t *testing.T) {
-	dir, err := ioutil.TempDir(".", "e2e_test_")
+	dir, err := ioutil.TempDir("", "e2e_test_")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -100,7 +102,7 @@ func TestE2EAppendGet(t *testing.T) {
 }
 
 func TestE2EWatch(t *testing.T) {
-	dir, err := ioutil.TempDir(".", "e2e_test_")
+	dir, err := ioutil.TempDir("", "e2e_test_")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -124,7 +126,7 @@ func TestE2EWatch(t *testing.T) {
 		{"A": "Hello", "B": 1.0},
 		{"A": "Bonjour", "B": 2.0},
 		{"A": "Hola", "B": 3.0},
-		{"A": "Shalon", "B": 4.0},
+		{"A": "Shalom", "B": 4.0},
 	}
 	for _, topic := range topics {
 		msgsChan, errChan, err := initiateWatch(topic, genID, "0")
@@ -169,22 +171,17 @@ func TestE2EWatch(t *testing.T) {
 }
 
 func waitServerStart() error {
-	done := make(chan struct{})
-	go func() {
-		for {
-			_, err := getGenerationID()
-			if err == nil {
-				close(done)
-				return
-			}
-			time.Sleep(time.Millisecond * 100)
+	timeout := time.After(time.Second * 5)
+	for {
+
+		if _, err := getGenerationID(); err == nil {
+			return nil
 		}
-	}()
-	select {
-	case <-done:
-		return nil
-	case <-time.After(time.Second * 5):
-		return fmt.Errorf("server didn't start for 5 seconds")
+		select {
+		case <-time.After(time.Millisecond * 100):
+		case <-timeout:
+			return fmt.Errorf("server didn't start for 5 seconds")
+		}
 	}
 }
 
@@ -201,7 +198,7 @@ func doAppend(v interface{}, topic string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := doHttpRequest("POST", "/topics/"+topic, nil, bytes.NewBuffer(data))
+	resp, err := doHTTPRequest("POST", "/topics/"+topic, nil, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
@@ -220,7 +217,7 @@ func doGet(topic, genID, fromIdx string) (*MessagesResponse, error) {
 	query := make(url.Values)
 	query.Set("generationID", genID)
 	query.Set("fromIndex", fromIdx)
-	resp, err := doHttpRequest("GET", "/topics/"+topic, query, nil)
+	resp, err := doHTTPRequest("GET", "/topics/"+topic, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +266,7 @@ func initiateWatch(topic, genID, fromIdx string) (<-chan *MessagesResponse, <-ch
 	return msgsChan, errChan, nil
 }
 
-func doHttpRequest(method, path string, query url.Values, body io.Reader) (*http.Response, error) {
+func doHTTPRequest(method, path string, query url.Values, body io.Reader) (*http.Response, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   "localhost" + listenAddr,

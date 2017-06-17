@@ -49,8 +49,8 @@ func TestWatch(t *testing.T) {
 			context:      "New messages created every 1s",
 			expectation:  "send messages to client every pushInterval",
 			messageCount: 10,
-			messageDelay: time.Second,
-			pushInterval: time.Second * 2,
+			messageDelay: time.Millisecond,
+			pushInterval: time.Millisecond * 2,
 		},
 	}
 
@@ -117,7 +117,7 @@ func runWatchTest(t *testing.T, test struct {
 				if item != submittedMessages[receivedItems] {
 					t.Fatalf("expected received message %s to equal sent message %s", item, submittedMessages[receivedItems])
 				}
-				t.Logf("item %v == %v", item, submittedMessages[receivedItems])
+				t.Logf("Item %v == %v", item, submittedMessages[receivedItems])
 				receivedItems++
 				if receivedItems == test.messageCount {
 					return

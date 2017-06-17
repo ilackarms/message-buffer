@@ -15,9 +15,7 @@ func main() {
 	pushInterval := flag.Duration("push-interval", 5*time.Second, "The interval at which to push messages to websocket clients.")
 	flag.Parse()
 
-	if err := runService(*storagePath, *listenAddr, *retention, *gcInterval, *pushInterval); err != nil {
-		log.Fatal(err)
-	}
+	log.Fatal(runService(*storagePath, *listenAddr, *retention, *gcInterval, *pushInterval))
 }
 
 func runService(storagePath, listenAddr string, retention, gcInterval, pushInterval time.Duration) error {
